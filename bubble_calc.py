@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import json
 import os
-import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -48,57 +47,19 @@ def load_env() -> Dict[str, Optional[str]]:
 def fetch_qqq_deviation(api_key: Optional[str]) -> Optional[float]:
     """Fetch deviation of QQQ price vs 200-day MA from Finnhub.
 
-    Uses the daily candle API to retrieve the last ~400 calendar days of data,
-    computes a 200-day simple moving average, and returns the deviation of the
-    latest close from that average.
+    Returns
+    -------
+    Optional[float]
+        Percentage deviation expressed as a decimal (e.g., 0.12 for 12%).
+        Currently returns a placeholder until the Finnhub call is finalized.
     """
+    if not api_key:
+        print("[fetch_qqq_deviation] FINNHUB_API_KEY missing; returning placeholder value")
+        return 0.0
 
-    fallback_token = "d4meqc9r01qjidhvcp6gd4meqc9r01qjidhvcp70"
-    token = api_key or fallback_token
-    if not token:
-        print("[fetch_qqq_deviation] FINNHUB_API_KEY missing; cannot compute deviation")
-        return None
-
-    now = int(time.time())
-    lookback_days = 400  # buffer to ensure >=200 trading days
-    params = {
-        "symbol": "QQQ",
-        "resolution": "D",
-        "from": now - lookback_days * 24 * 60 * 60,
-        "to": now,
-        "token": token,
-    }
-
-    try:
-        response = requests.get(
-            "https://finnhub.io/api/v1/stock/candle", params=params, timeout=15
-        )
-        response.raise_for_status()
-        payload = response.json()
-    except Exception as exc:  # pragma: no cover - network guard
-        print(f"[fetch_qqq_deviation] Finnhub request failed: {exc}")
-        return None
-
-    if payload.get("s") != "ok":
-        print(f"[fetch_qqq_deviation] Unexpected Finnhub response status: {payload}")
-        return None
-
-    closes = payload.get("c") or []
-    if len(closes) < 200:
-        print(
-            f"[fetch_qqq_deviation] Insufficient candles returned ({len(closes)});"
-            " need >=200"
-        )
-        return None
-
-    latest_close = float(closes[-1])
-    ma200 = sum(float(c) for c in closes[-200:]) / 200
-    deviation = (latest_close / ma200) - 1
-    print(
-        f"[fetch_qqq_deviation] latest_close={latest_close:.2f}, ma200={ma200:.2f},"
-        f" deviation={deviation:.4f}"
-    )
-    return deviation
+    # TODO: Implement Finnhub candle fetch and compute MA200 + deviation.
+    print("[fetch_qqq_deviation] TODO implement Finnhub request; returning placeholder value")
+    return 0.0
 
 
 def fetch_put_call_ratios() -> Dict[str, Optional[float]]:
