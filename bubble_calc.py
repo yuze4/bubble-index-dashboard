@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import time
 from datetime import datetime
 from pathlib import Path
@@ -16,6 +17,7 @@ from typing import Any, Dict, Optional
 
 import pandas as pd
 import requests
+from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 
 DATA_DIR = Path("data")
@@ -53,9 +55,7 @@ def fetch_qqq_deviation(api_key: Optional[str]) -> Optional[float]:
     latest close from that average.
     """
 
-    fallback_token = "d4meqc9r01qjidhvcp6gd4meqc9r01qjidhvcp70"
-    token = api_key or fallback_token
-    if not token:
+    if not api_key:
         print("[fetch_qqq_deviation] FINNHUB_API_KEY missing; cannot compute deviation")
         return None
 
@@ -66,7 +66,7 @@ def fetch_qqq_deviation(api_key: Optional[str]) -> Optional[float]:
         "resolution": "D",
         "from": now - lookback_days * 24 * 60 * 60,
         "to": now,
-        "token": token,
+        "token": api_key,
     }
 
     try:
@@ -105,10 +105,58 @@ def fetch_put_call_ratios() -> Dict[str, Optional[float]]:
     """Fetch put/call ratios from the CBOE daily statistics page.
 
     Returns a mapping with keys: total, equity, index.
-    Currently returns placeholders and should be replaced with real scraping.
     """
-    print("[fetch_put_call_ratios] TODO implement CBOE scraping; returning placeholder values")
-    return {"total": 0.9, "equity": 0.8, "index": 1.1}
+    url = "https://www.cboe.com/us/options/market_statistics/daily/"
+    result: Dict[str, Optional[float]] = {"total": None, "equity": None, "index": None}
+
+    try:
+        response = requests.get(url, timeout=15, headers={"User-Agent": "Mozilla/5.0"})
+        response.raise_for_status()
+    except Exception as exc:  # pragma: no cover - network guard
+        print(f"[fetch_put_call_ratios] Request failed: {exc}")
+        return result
+
+    soup = BeautifulSoup(response.text, "html.parser")
+    patterns = {
+        "total": ["total put/call ratio", "total put/call"],
+        "equity": ["equity put/call ratio", "equity put/call"],
+        "index": ["index put/call ratio", "index put/call"],
+    }
+
+    def parse_first_numeric(cells: Any) -> Optional[float]:
+        for cell in cells:
+            text = cell.get_text(strip=True).replace(",", "")
+            if not text:
+                continue
+            numeric_match = re.search(r"[-+]?[0-9]*\.?[0-9]+", text)
+            if numeric_match:
+                try:
+                    return float(numeric_match.group())
+                except ValueError:
+                    continue
+        return None
+
+    rows = soup.find_all("tr")
+    for row in rows:
+        cells = row.find_all(["td", "th"])
+        if not cells:
+            continue
+        row_text = " ".join(cell.get_text(" ", strip=True).lower() for cell in cells)
+        for key, labels in patterns.items():
+            if result[key] is not None:
+                continue
+            if any(label in row_text for label in labels):
+                value = parse_first_numeric(cells)
+                if value is not None:
+                    result[key] = value
+                    print(f"[fetch_put_call_ratios] Parsed {key} put/call ratio: {value}")
+                break
+
+    for key, value in result.items():
+        if value is None:
+            print(f"[fetch_put_call_ratios] Unable to parse {key} put/call ratio from CBOE page")
+
+    return result
 
 
 def fetch_vix(api_key: Optional[str]) -> Optional[float]:
@@ -116,15 +164,13 @@ def fetch_vix(api_key: Optional[str]) -> Optional[float]:
 
     Currently returns a placeholder value until the FRED request is wired up.
     """
-    fallback_token = "38481305ae09c75a439085f7364de357"
-    token = api_key or fallback_token
-    if not token:
+    if not api_key:
         print("[fetch_vix] FRED_API_KEY missing; cannot fetch VIX")
         return None
 
     params = {
         "series_id": "VIXCLS",
-        "api_key": token,
+        "api_key": api_key,
         "file_type": "json",
     }
 
@@ -162,15 +208,13 @@ def fetch_anfci(api_key: Optional[str]) -> Optional[float]:
 
     Currently returns a placeholder value until the FRED request is wired up.
     """
-    fallback_token = "38481305ae09c75a439085f7364de357"
-    token = api_key or fallback_token
-    if not token:
+    if not api_key:
         print("[fetch_anfci] FRED_API_KEY missing; cannot fetch ANFCI")
         return None
 
     params = {
         "series_id": "ANFCI",
-        "api_key": token,
+        "api_key": api_key,
         "file_type": "json",
     }
 
@@ -312,6 +356,15 @@ def compute_bubble_index(use_placeholders: bool = True) -> Dict[str, Any]:
     """
     env = load_env()
     print("[compute_bubble_index] Starting computation")
+
+    if not env.get("FINNHUB_API_KEY"):
+        raise RuntimeError(
+            "FINNHUB_API_KEY is missing. Please set it in your .env file."
+        )
+    if not env.get("FRED_API_KEY"):
+        raise RuntimeError(
+            "FRED_API_KEY is missing. Please set it in your .env file."
+        )
 
     price_dev = fetch_qqq_deviation(env.get("FINNHUB_API_KEY"))
     ratios = fetch_put_call_ratios()
