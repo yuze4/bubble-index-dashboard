@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>US Tech/AI Bubble Index</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root {
+      --bg: #050915;
+      --card: rgba(15, 23, 42, 0.75);
+      --border: rgba(255, 255, 255, 0.05);
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+      --accent: #22d3ee;
+      --accent-2: #22c55e;
+      --danger: #ef4444;
+      --warn: #eab308;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      background: linear-gradient(135deg, rgba(34, 211, 238, 0.08), rgba(34, 197, 94, 0.05)),
+                  radial-gradient(circle at 20% 20%, rgba(34, 197, 94, 0.08), transparent 30%),
+                  radial-gradient(circle at 80% 0%, rgba(34, 211, 238, 0.12), transparent 30%),
+                  var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 32px;
+      position: relative;
+      overflow-x: hidden;
+    }
+
+    /* currency-inspired rings */
+    body::before, body::after {
+      content: "";
+      position: absolute;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(34,211,238,0.18), transparent 55%);
+      filter: blur(60px);
+      z-index: 0;
+    }
+    body::before { width: 420px; height: 420px; top: -160px; left: -80px; }
+    body::after { width: 520px; height: 520px; bottom: -220px; right: -120px; background: radial-gradient(circle, rgba(34,197,94,0.16), transparent 55%); }
+
+    .shell {
+      position: relative;
+      z-index: 1;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+      flex-wrap: wrap;
+    }
+
+    .title {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .coin {
+      width: 50px;
+      height: 50px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 30% 30%, #fff, #c7f9cc 30%, #1e293b 70%);
+      border: 2px solid rgba(255,255,255,0.15);
+      box-shadow: 0 10px 40px rgba(0,0,0,0.35);
+      display: grid;
+      place-items: center;
+      color: #0f172a;
+      font-weight: 800;
+    }
+
+    h1 { margin: 0; font-size: 28px; }
+    .muted { color: var(--muted); }
+
+    .cta { display: inline-flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 999px; background: rgba(34,211,238,0.14); border: 1px solid var(--border); color: var(--text); text-decoration: none; font-weight: 600; }
+
+    .grid { display: grid; gap: 16px; margin-top: 18px; }
+    .cards { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+
+    .card {
+      background: linear-gradient(145deg, rgba(255,255,255,0.04), rgba(255,255,255,0.01));
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 16px;
+      box-shadow: 0 16px 60px rgba(0,0,0,0.28);
+      backdrop-filter: blur(10px);
+    }
+
+    .card h3 { margin: 0 0 6px; color: var(--muted); font-size: 13px; letter-spacing: 0.2px; }
+    .value { font-size: 34px; font-weight: 700; }
+    .chip { display: inline-flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; }
+    .chip.ok { background: rgba(34,197,94,0.14); color: #22c55e; }
+    .chip.warn { background: rgba(234,179,8,0.14); color: #eab308; }
+    .chip.danger { background: rgba(239,68,68,0.14); color: #ef4444; }
+
+    .section-title { display: flex; align-items: center; justify-content: space-between; margin: 24px 0 10px; flex-wrap: wrap; gap: 10px; }
+    .section-title h2 { margin: 0; font-size: 18px; }
+
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 11px 10px; border-bottom: 1px solid var(--border); font-size: 14px; text-align: left; }
+    th { color: var(--muted); font-weight: 600; }
+    tbody tr:hover { background: rgba(255,255,255,0.02); }
+
+    .chart-card { padding: 12px; }
+    canvas { width: 100%; }
+
+    .alert { padding: 12px 14px; border-radius: 12px; border: 1px solid rgba(239,68,68,0.28); background: rgba(239,68,68,0.12); color: var(--danger); margin: 12px 0; }
+
+    .badge { padding: 8px 12px; border-radius: 12px; background: rgba(255,255,255,0.06); border: 1px solid var(--border); display: inline-flex; align-items: center; gap: 8px; font-weight: 600; }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header>
+      <div class="title">
+        <div class="coin">$</div>
+        <div>
+          <h1>US Tech/AI Bubble Index</h1>
+          <div class="muted" id="timestamp">Loading latest reading…</div>
+        </div>
+      </div>
+      <div class="badge" id="placeholder-flag" style="display:none;">Placeholder market snapshot</div>
+    </header>
+
+    <div class="grid cards" id="headline">
+      <div class="card">
+        <h3>Bubble Index (0-10)</h3>
+        <div class="value" id="bubble-index">--</div>
+        <div class="muted">Composite of sentiment &amp; macro stress</div>
+      </div>
+      <div class="card">
+        <h3>Weighted Score</h3>
+        <div class="value" id="weighted-score">--</div>
+        <div class="muted">0 = calm &nbsp;|&nbsp; 5+ = frothy</div>
+      </div>
+      <div class="card">
+        <h3>Put/Call Ratios</h3>
+        <div class="value" id="total-pcr">--</div>
+        <div class="muted">Equity <span id="equity-pcr">--</span> · Index <span id="index-pcr">--</span></div>
+      </div>
+      <div class="card">
+        <h3>QQQ vs 200d MA</h3>
+        <div class="value" id="qqq-dev">--</div>
+        <div class="muted">Deviation from the long-term glidepath</div>
+      </div>
+    </div>
+
+    <div class="section-title">
+      <h2>Bubble Trendline</h2>
+      <span class="muted">Sourced from <code>data/bubble_daily.csv</code></span>
+    </div>
+    <div class="card chart-card">
+      <canvas id="history-chart" height="120"></canvas>
+    </div>
+
+    <div class="section-title">
+      <h2>Today&#39;s Inputs</h2>
+      <span class="muted">Live snapshot from <code>bubble_today.json</code></span>
+    </div>
+    <div class="card">
+      <table id="raw-table">
+        <thead>
+          <tr>
+            <th>Metric</th>
+            <th>Value</th>
+            <th>Score</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    const formatter = new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 });
+
+    const demoSnapshot = {
+      bubbleIndex: 4.8,
+      weightedScore: 4.2,
+      timestamp: new Date().toISOString(),
+      raw: {
+        priceDeviation: 0.07,
+        totalPutCall: 0.95,
+        equityPutCall: 0.87,
+        indexPutCall: 1.28,
+        vix: 15.2,
+        anfci: -0.25,
+        ipoCount30d: 9,
+      },
+      scores: {
+        priceDeviation: 2,
+        totalPutCall: 1,
+        smartDumb: 1,
+        vix: 1,
+        anfci: 0,
+        ipoHeat: 1,
+      },
+    };
+
+    function badge(score) {
+      if (score >= 2) return '<span class="chip danger">Frothy</span>';
+      if (score === 1) return '<span class="chip warn">Elevated</span>';
+      return '<span class="chip ok">Calm</span>';
+    }
+
+    async function fetchJson(url) {
+      const res = await fetch(url, { cache: 'no-store' });
+      if (!res.ok) throw new Error('Failed to load ' + url);
+      return res.json();
+    }
+
+    async function fetchCsv(url) {
+      const res = await fetch(url, { cache: 'no-store' });
+      if (!res.ok) throw new Error('Failed to load ' + url);
+      const text = await res.text();
+      const trimmed = text.trim();
+      if (!trimmed) return [];
+      const [header, ...rows] = trimmed.split(/\r?\n/);
+      const headers = header.split(',');
+      return rows.map(line => {
+        const values = line.split(',');
+        const item = {};
+        headers.forEach((key, idx) => item[key] = values[idx]);
+        item.bubbleIndex = Number(item.bubbleIndex);
+        return item;
+      });
+    }
+
+    function renderHeadline(latest) {
+      document.getElementById('bubble-index').textContent = formatter.format(latest.bubbleIndex ?? 0);
+      document.getElementById('weighted-score').textContent = formatter.format(latest.weightedScore ?? 0);
+      document.getElementById('total-pcr').textContent = formatter.format(latest.raw.totalPutCall ?? 0);
+      document.getElementById('equity-pcr').textContent = formatter.format(latest.raw.equityPutCall ?? 0);
+      document.getElementById('index-pcr').textContent = formatter.format(latest.raw.indexPutCall ?? 0);
+      const pct = (latest.raw.priceDeviation ?? 0) * 100;
+      document.getElementById('qqq-dev').textContent = `${formatter.format(pct)}%`;
+      const ts = latest.timestamp ? new Date(latest.timestamp).toLocaleString() : 'N/A';
+      document.getElementById('timestamp').textContent = `Last updated ${ts}`;
+    }
+
+    function renderTable(latest) {
+      const tbody = document.querySelector('#raw-table tbody');
+      tbody.innerHTML = '';
+      const rows = [
+        ['QQQ deviation vs 200d MA', `${formatter.format((latest.raw.priceDeviation ?? 0) * 100)}%`, latest.scores.priceDeviation],
+        ['Total put/call ratio', formatter.format(latest.raw.totalPutCall ?? 0), latest.scores.totalPutCall],
+        ['Equity vs Index put/call spread', `${formatter.format(latest.raw.equityPutCall ?? 0)} / ${formatter.format(latest.raw.indexPutCall ?? 0)}`, latest.scores.smartDumb],
+        ['VIX level', formatter.format(latest.raw.vix ?? 0), latest.scores.vix],
+        ['ANFCI', formatter.format(latest.raw.anfci ?? 0), latest.scores.anfci],
+        ['IPO count (30d)', formatter.format(latest.raw.ipoCount30d ?? 0), latest.scores.ipoHeat],
+      ];
+      rows.forEach(([label, value, score]) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${label}</td><td>${value}</td><td>${badge(score)}</td>`;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function renderChart(history) {
+      const ctx = document.getElementById('history-chart');
+      if (!history.length) {
+        ctx.parentElement.insertAdjacentHTML('beforeend', '<div class="alert">No historical records found. Run <code>python bubble_calc.py</code> to generate <code>data/bubble_daily.csv</code>.</div>');
+        return;
+      }
+      const labels = history.map(row => new Date(row.timestamp).toLocaleDateString());
+      const values = history.map(row => row.bubbleIndex);
+      new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [{
+            label: 'Bubble Index',
+            data: values,
+            borderColor: '#22d3ee',
+            backgroundColor: 'rgba(34,211,238,0.16)',
+            tension: 0.35,
+            fill: true,
+            pointRadius: 3,
+          }],
+        },
+        options: {
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { grid: { color: 'rgba(255,255,255,0.05)' } },
+            y: { grid: { color: 'rgba(255,255,255,0.05)' }, suggestedMin: 0, suggestedMax: 10 },
+          },
+        },
+      });
+    }
+
+    async function loadLatest() {
+      try {
+        const latest = await fetchJson('./bubble_today.json');
+        renderHeadline(latest);
+        renderTable(latest);
+        const placeholderUsed = Object.values(latest.raw || {}).some(v => Number(v) === 0);
+        document.getElementById('placeholder-flag').style.display = placeholderUsed ? 'inline-flex' : 'none';
+      } catch (err) {
+        console.warn('Falling back to demo snapshot:', err);
+        document.getElementById('placeholder-flag').style.display = 'inline-flex';
+        renderHeadline(demoSnapshot);
+        renderTable(demoSnapshot);
+      }
+    }
+
+    async function loadHistory() {
+      try {
+        const history = await fetchCsv('./data/bubble_daily.csv');
+        renderChart(history.slice(-120));
+      } catch (err) {
+        console.warn('No history available:', err);
+        renderChart([]);
+      }
+    }
+
+    loadLatest();
+    loadHistory();
+  </script>
+</body>
+</html>
