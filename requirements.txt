@@ -1,0 +1,5 @@
+pandas
+requests
+python-dotenv
+beautifulsoup4
+yfinance>=0.2.40
