@@ -2,3 +2,5 @@
 logs/
 __pycache__/
 *.pyc
+bubble_today.json
+data/*.csv
