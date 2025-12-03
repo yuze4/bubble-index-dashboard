@@ -89,13 +89,70 @@ def fetch_qqq_deviation(api_key: Optional[str]) -> Optional[float]:
 
 
 def fetch_put_call_ratios() -> Dict[str, Optional[float]]:
-    """Fetch put/call ratios from the CBOE daily statistics page.
+    """Fetch put/call ratios from CBOE.
+
+    The scraper first tries the CBOE JSON API (more stable than the HTML
+    layout), then falls back to parsing the daily statistics page if the API
+    is unavailable.
 
     Returns a mapping with keys: total, equity, index.
     """
-    url = "https://www.cboe.com/us/options/market_statistics/daily/"
+
+    def parse_float(value: Any) -> Optional[float]:
+        if value is None:
+            return None
+        if isinstance(value, (int, float)):
+            return float(value)
+        if isinstance(value, str):
+            cleaned = value.replace(",", "").strip()
+            match = re.search(r"[-+]?[0-9]*\.?[0-9]+", cleaned)
+            if match:
+                try:
+                    return float(match.group())
+                except ValueError:
+                    return None
+        return None
+
     result: Dict[str, Optional[float]] = {"total": None, "equity": None, "index": None}
 
+    # 1) Try the official JSON feed first (less sensitive to HTML layout changes).
+    json_url = "https://cdn.cboe.com/api/global/us_indices/pc_ratio.json"
+    try:
+        api_resp = requests.get(json_url, timeout=15, headers={"User-Agent": "Mozilla/5.0"})
+        api_resp.raise_for_status()
+        payload = api_resp.json()
+        records = payload.get("data") or payload.get("rows") or []
+        for record in records:
+            if not isinstance(record, dict):
+                continue
+            raw_type = record.get("type") or record.get("category") or record.get("label")
+            ratio = parse_float(
+                record.get("put_call_ratio")
+                or record.get("pc_ratio")
+                or record.get("value")
+                or record.get("ratio")
+            )
+            if not raw_type or ratio is None:
+                continue
+            type_key = str(raw_type).strip().lower()
+            if "total" in type_key:
+                result["total"] = ratio
+            elif "equity" in type_key:
+                result["equity"] = ratio
+            elif "index" in type_key:
+                result["index"] = ratio
+        if all(value is not None for value in result.values()):
+            print(
+                f"[fetch_put_call_ratios] Parsed ratios from JSON feed: total={result['total']}, equity={result['equity']}, index={result['index']}"
+            )
+            return result
+        else:
+            print("[fetch_put_call_ratios] JSON feed incomplete; falling back to HTML scrape")
+    except Exception as exc:  # pragma: no cover - network guard
+        print(f"[fetch_put_call_ratios] JSON feed unavailable: {exc}")
+
+    # 2) Fallback: scrape the daily statistics page.
+    url = "https://www.cboe.com/us/options/market_statistics/daily/"
     try:
         response = requests.get(url, timeout=15, headers={"User-Agent": "Mozilla/5.0"})
         response.raise_for_status()
@@ -105,23 +162,10 @@ def fetch_put_call_ratios() -> Dict[str, Optional[float]]:
 
     soup = BeautifulSoup(response.text, "html.parser")
     patterns = {
-        "total": ["total put/call ratio", "total put/call"],
-        "equity": ["equity put/call ratio", "equity put/call"],
-        "index": ["index put/call ratio", "index put/call"],
+        "total": ["total put/call ratio", "total put/call", "total put-call"],
+        "equity": ["equity put/call ratio", "equity put/call", "equity put-call"],
+        "index": ["index put/call ratio", "index put/call", "index put-call"],
     }
-
-    def parse_first_numeric(cells: Any) -> Optional[float]:
-        for cell in cells:
-            text = cell.get_text(strip=True).replace(",", "")
-            if not text:
-                continue
-            numeric_match = re.search(r"[-+]?[0-9]*\.?[0-9]+", text)
-            if numeric_match:
-                try:
-                    return float(numeric_match.group())
-                except ValueError:
-                    continue
-        return None
 
     rows = soup.find_all("tr")
     for row in rows:
@@ -133,10 +177,14 @@ def fetch_put_call_ratios() -> Dict[str, Optional[float]]:
             if result[key] is not None:
                 continue
             if any(label in row_text for label in labels):
-                value = parse_first_numeric(cells)
+                value = None
+                for cell in cells:
+                    value = parse_float(cell.get_text(" ", strip=True))
+                    if value is not None:
+                        break
                 if value is not None:
                     result[key] = value
-                    print(f"[fetch_put_call_ratios] Parsed {key} put/call ratio: {value}")
+                    print(f"[fetch_put_call_ratios] Parsed {key} put/call ratio from HTML: {value}")
                 break
 
     for key, value in result.items():
@@ -526,8 +574,10 @@ def write_outputs(result: Dict[str, Any]) -> None:
 
 
 if __name__ == "__main__":
+    use_placeholders_env = os.getenv("USE_PLACEHOLDERS", "true").lower()
+    use_placeholders = use_placeholders_env not in {"0", "false", "no"}
     try:
-        result = compute_bubble_index(use_placeholders=True)
+        result = compute_bubble_index(use_placeholders=use_placeholders)
         write_outputs(result)
     except Exception as exc:  # pragma: no cover - top level error guard
         print(f"[main] Bubble index computation failed: {exc}")
