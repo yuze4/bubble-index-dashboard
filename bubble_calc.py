@@ -10,7 +10,6 @@ from __future__ import annotations
 import json
 import os
 import re
-import time
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -19,6 +18,7 @@ import pandas as pd
 import requests
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
+import yfinance as yf
 
 DATA_DIR = Path("data")
 DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -48,55 +48,42 @@ def load_env() -> Dict[str, Optional[str]]:
 # === Fetchers ===
 
 def fetch_qqq_deviation(api_key: Optional[str]) -> Optional[float]:
-    """Fetch deviation of QQQ price vs 200-day MA from Finnhub.
+    """Fetch deviation of QQQ price vs 200-day MA using Yahoo Finance data.
 
-    Uses the daily candle API to retrieve the last ~400 calendar days of data,
-    computes a 200-day simple moving average, and returns the deviation of the
-    latest close from that average.
+    The `api_key` argument is accepted for signature compatibility but is not
+    used because Yahoo Finance access does not require authentication.
     """
 
-    if not api_key:
-        print("[fetch_qqq_deviation] FINNHUB_API_KEY missing; cannot compute deviation")
-        return None
-
-    now = int(time.time())
-    lookback_days = 400  # buffer to ensure >=200 trading days
-    params = {
-        "symbol": "QQQ",
-        "resolution": "D",
-        "from": now - lookback_days * 24 * 60 * 60,
-        "to": now,
-        "token": api_key,
-    }
-
     try:
-        response = requests.get(
-            "https://finnhub.io/api/v1/stock/candle", params=params, timeout=15
+        data = yf.download(
+            "QQQ",
+            period="400d",
+            interval="1d",
+            auto_adjust=False,
+            progress=False,
         )
-        response.raise_for_status()
-        payload = response.json()
     except Exception as exc:  # pragma: no cover - network guard
-        print(f"[fetch_qqq_deviation] Finnhub request failed: {exc}")
+        print(f"[fetch_qqq_deviation] yfinance download for QQQ failed: {exc}")
         return None
 
-    if payload.get("s") != "ok":
-        print(f"[fetch_qqq_deviation] Unexpected Finnhub response status: {payload}")
+    if data.empty or len(data) < 200:
+        print(
+            f"[fetch_qqq_deviation] Insufficient candles returned ({len(data)}); need >=200"
+        )
         return None
 
-    closes = payload.get("c") or []
+    closes = data["Close"].dropna()
     if len(closes) < 200:
         print(
-            f"[fetch_qqq_deviation] Insufficient candles returned ({len(closes)});"
-            " need >=200"
+            f"[fetch_qqq_deviation] Not enough valid close prices ({len(closes)}); need >=200"
         )
         return None
 
-    latest_close = float(closes[-1])
-    ma200 = sum(float(c) for c in closes[-200:]) / 200
-    deviation = (latest_close / ma200) - 1
+    latest_close = float(closes.iloc[-1])
+    ma200 = float(closes.iloc[-200:].mean())
+    deviation = (latest_close / ma200) - 1.0
     print(
-        f"[fetch_qqq_deviation] latest_close={latest_close:.2f}, ma200={ma200:.2f},"
-        f" deviation={deviation:.4f}"
+        f"[fetch_qqq_deviation] (yfinance) latest_close={latest_close:.2f}, ma200={ma200:.2f}, deviation={deviation:.4f}"
     )
     return deviation
 
