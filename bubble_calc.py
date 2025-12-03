@@ -11,7 +11,7 @@ import json
 import os
 import re
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -257,9 +257,104 @@ def fetch_ipo_heat(api_key: Optional[str]) -> Dict[str, Optional[float]]:
         print("[fetch_ipo_heat] FINNHUB_API_KEY missing; returning placeholder values")
         return {"count30d": 0, "proceeds30d": 0.0}
 
-    # TODO: Implement Finnhub IPO calendar fetch and aggregation over 30 days.
-    print("[fetch_ipo_heat] TODO implement Finnhub IPO calendar request; returning placeholder values")
-    return {"count30d": 0, "proceeds30d": 0.0}
+    end_date = datetime.utcnow().date()
+    start_date = end_date - timedelta(days=30)
+    from_str = start_date.isoformat()
+    to_str = end_date.isoformat()
+
+    params = {"from": from_str, "to": to_str, "token": api_key}
+
+    try:
+        response = requests.get(
+            "https://finnhub.io/api/v1/calendar/ipo", params=params, timeout=15
+        )
+        response.raise_for_status()
+        payload = response.json()
+    except Exception as exc:  # pragma: no cover - network guard
+        print(f"[fetch_ipo_heat] Finnhub request failed: {exc}")
+        return {"count30d": 0.0, "proceeds30d": 0.0}
+
+    def extract_events(data: Any) -> Any:
+        if isinstance(data, dict):
+            for key in ["ipoCalendar", "ipo_calendar", "ipos", "data"]:
+                events = data.get(key)
+                if isinstance(events, list):
+                    return events
+        if isinstance(data, list):
+            return data
+        return []
+
+    def parse_float(value: Any) -> Optional[float]:
+        if value is None:
+            return None
+        if isinstance(value, (int, float)):
+            return float(value)
+        if isinstance(value, str):
+            cleaned = value.replace(",", "").replace("$", "").strip()
+            if cleaned in {"", "NA", "N/A", ".", "null", "None"}:
+                return None
+            try:
+                return float(cleaned)
+            except ValueError:
+                return None
+        return None
+
+    def parse_price(value: Any) -> Optional[float]:
+        if value is None:
+            return None
+        if isinstance(value, (int, float)):
+            return float(value)
+        if isinstance(value, str):
+            cleaned = value.replace("$", "").strip()
+            if "-" in cleaned:
+                parts = [p.strip() for p in cleaned.split("-") if p.strip()]
+                if len(parts) == 2:
+                    low = parse_float(parts[0])
+                    high = parse_float(parts[1])
+                    if low is not None and high is not None:
+                        return (low + high) / 2
+            return parse_float(cleaned)
+        return None
+
+    events = extract_events(payload)
+    count = 0
+    total_proceeds = 0.0
+
+    for event in events:
+        if not isinstance(event, dict):
+            continue
+        count += 1
+
+        amount = None
+        for field in ["amount", "totalSharesValue", "proceeds"]:
+            if field in event:
+                amount = parse_float(event.get(field))
+                if amount is not None:
+                    total_proceeds += amount
+                    break
+        if amount is not None:
+            continue
+
+        shares = None
+        for field in ["numberOfShares", "shares"]:
+            shares = parse_float(event.get(field))
+            if shares is not None:
+                break
+
+        price_mid = None
+        for field in ["price", "priceRange"]:
+            if field in event:
+                price_mid = parse_price(event.get(field))
+                if price_mid is not None:
+                    break
+
+        if shares is not None and price_mid is not None:
+            total_proceeds += shares * price_mid
+
+    print(
+        f"[fetch_ipo_heat] Aggregated {count} IPOs from {from_str} to {to_str}, total_proceeds={total_proceeds:.2f}"
+    )
+    return {"count30d": float(count), "proceeds30d": float(total_proceeds)}
 
 
 # === Scoring helpers ===
@@ -357,20 +452,23 @@ def compute_bubble_index(use_placeholders: bool = True) -> Dict[str, Any]:
     env = load_env()
     print("[compute_bubble_index] Starting computation")
 
-    if not env.get("FINNHUB_API_KEY"):
-        raise RuntimeError(
-            "FINNHUB_API_KEY is missing. Please set it in your .env file."
+    finnhub_key = env.get("FINNHUB_API_KEY")
+    fred_key = env.get("FRED_API_KEY")
+
+    if not finnhub_key:
+        print(
+            "[compute_bubble_index] Warning: FINNHUB_API_KEY is missing; some indicators may fall back to placeholders"
         )
-    if not env.get("FRED_API_KEY"):
-        raise RuntimeError(
-            "FRED_API_KEY is missing. Please set it in your .env file."
+    if not fred_key:
+        print(
+            "[compute_bubble_index] Warning: FRED_API_KEY is missing; some indicators may fall back to placeholders"
         )
 
-    price_dev = fetch_qqq_deviation(env.get("FINNHUB_API_KEY"))
+    price_dev = fetch_qqq_deviation(finnhub_key)
     ratios = fetch_put_call_ratios()
-    vix_level = fetch_vix(env.get("FRED_API_KEY"))
-    anfci_value = fetch_anfci(env.get("FRED_API_KEY"))
-    ipo_stats = fetch_ipo_heat(env.get("FINNHUB_API_KEY"))
+    vix_level = fetch_vix(fred_key)
+    anfci_value = fetch_anfci(fred_key)
+    ipo_stats = fetch_ipo_heat(finnhub_key)
 
     raw_values: Dict[str, Any] = {
         "priceDeviation": price_dev,
