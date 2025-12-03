@@ -7,10 +7,12 @@ module directly to refresh `bubble_today.json` and append to
 """
 from __future__ import annotations
 
+import csv
 import json
 import os
 import re
 from datetime import datetime, timedelta
+from io import StringIO
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -89,59 +91,133 @@ def fetch_qqq_deviation(api_key: Optional[str]) -> Optional[float]:
 
 
 def fetch_put_call_ratios() -> Dict[str, Optional[float]]:
-    """Fetch put/call ratios from the CBOE daily statistics page.
+    """Fetch put/call ratios with fallbacks for CBOE source changes.
 
-    Returns a mapping with keys: total, equity, index.
+    The CBOE site has changed HTML structures multiple times. This helper now
+    tries lightweight CSV/JSON feeds served from their CDN before falling back
+    to HTML scraping. The return mapping always contains keys: total, equity,
+    index.
     """
-    url = "https://www.cboe.com/us/options/market_statistics/daily/"
+
     result: Dict[str, Optional[float]] = {"total": None, "equity": None, "index": None}
 
-    try:
-        response = requests.get(url, timeout=15, headers={"User-Agent": "Mozilla/5.0"})
-        response.raise_for_status()
-    except Exception as exc:  # pragma: no cover - network guard
-        print(f"[fetch_put_call_ratios] Request failed: {exc}")
-        return result
+    def safe_float(value: Any) -> Optional[float]:
+        try:
+            return float(str(value).replace(",", "").strip())
+        except (TypeError, ValueError):
+            return None
 
-    soup = BeautifulSoup(response.text, "html.parser")
-    patterns = {
-        "total": ["total put/call ratio", "total put/call"],
-        "equity": ["equity put/call ratio", "equity put/call"],
-        "index": ["index put/call ratio", "index put/call"],
-    }
-
-    def parse_first_numeric(cells: Any) -> Optional[float]:
-        for cell in cells:
-            text = cell.get_text(strip=True).replace(",", "")
-            if not text:
+    def parse_csv_payload(text: str) -> Optional[Dict[str, float]]:
+        buffer = StringIO(text)
+        reader = list(csv.DictReader(buffer))
+        if not reader:
+            return None
+        for row in reversed(reader):
+            parsed = {
+                "total": safe_float(row.get("total")) or safe_float(row.get("Total")),
+                "equity": safe_float(row.get("equity")) or safe_float(row.get("Equity")),
+                "index": safe_float(row.get("index")) or safe_float(row.get("Index")),
+            }
+            if all(v is None for v in parsed.values()):
                 continue
-            numeric_match = re.search(r"[-+]?[0-9]*\.?[0-9]+", text)
-            if numeric_match:
-                try:
-                    return float(numeric_match.group())
-                except ValueError:
-                    continue
+            return parsed
         return None
 
-    rows = soup.find_all("tr")
-    for row in rows:
-        cells = row.find_all(["td", "th"])
-        if not cells:
-            continue
-        row_text = " ".join(cell.get_text(" ", strip=True).lower() for cell in cells)
-        for key, labels in patterns.items():
-            if result[key] is not None:
+    def parse_json_payload(payload: Any) -> Optional[Dict[str, float]]:
+        if isinstance(payload, dict):
+            rows = payload.get("data") or payload.get("rows") or payload.get("items")
+        else:
+            rows = payload
+        if not isinstance(rows, list):
+            return None
+        for row in reversed(rows):
+            if not isinstance(row, dict):
                 continue
-            if any(label in row_text for label in labels):
-                value = parse_first_numeric(cells)
-                if value is not None:
-                    result[key] = value
-                    print(f"[fetch_put_call_ratios] Parsed {key} put/call ratio: {value}")
-                break
+            parsed = {
+                "total": safe_float(row.get("total")),
+                "equity": safe_float(row.get("equity")),
+                "index": safe_float(row.get("index")),
+            }
+            if all(v is None for v in parsed.values()):
+                continue
+            return parsed
+        return None
+
+    def parse_html_page(text: str) -> Optional[Dict[str, float]]:
+        soup = BeautifulSoup(text, "html.parser")
+        patterns = {
+            "total": ["total put/call ratio", "total put/call"],
+            "equity": ["equity put/call ratio", "equity put/call"],
+            "index": ["index put/call ratio", "index put/call"],
+        }
+
+        def parse_first_numeric(cells: Any) -> Optional[float]:
+            for cell in cells:
+                text = cell.get_text(strip=True).replace(",", "")
+                if not text:
+                    continue
+                numeric_match = re.search(r"[-+]?[0-9]*\.?[0-9]+", text)
+                if numeric_match:
+                    try:
+                        return float(numeric_match.group())
+                    except ValueError:
+                        continue
+            return None
+
+        rows = soup.find_all("tr")
+        parsed: Dict[str, Optional[float]] = {"total": None, "equity": None, "index": None}
+        for row in rows:
+            cells = row.find_all(["td", "th"])
+            if not cells:
+                continue
+            row_text = " ".join(cell.get_text(" ", strip=True).lower() for cell in cells)
+            for key, labels in patterns.items():
+                if parsed[key] is not None:
+                    continue
+                if any(label in row_text for label in labels):
+                    value = parse_first_numeric(cells)
+                    if value is not None:
+                        parsed[key] = value
+                        print(f"[fetch_put_call_ratios] Parsed {key} put/call ratio from HTML: {value}")
+                    break
+        if all(value is None for value in parsed.values()):
+            return None
+        return parsed
+
+    sources = [
+        ("CSV feed", "https://cdn.cboe.com/data/us/options/market_statistics/put_call_ratios.csv", parse_csv_payload, "text"),
+        ("JSON feed", "https://cdn.cboe.com/data/us/options/market_statistics/put_call_ratios.json", parse_json_payload, "json"),
+        ("HTML page", "https://www.cboe.com/us/options/market_statistics/daily/", parse_html_page, "text"),
+    ]
+
+    for source_name, url, parser, mode in sources:
+        try:
+            response = requests.get(url, timeout=15, headers={"User-Agent": "Mozilla/5.0"})
+            response.raise_for_status()
+        except Exception as exc:  # pragma: no cover - network guard
+            print(f"[fetch_put_call_ratios] {source_name} request failed: {exc}")
+            continue
+
+        payload: Any
+        if mode == "json":
+            try:
+                payload = response.json()
+            except Exception as exc:  # pragma: no cover - network guard
+                print(f"[fetch_put_call_ratios] {source_name} JSON parse failed: {exc}")
+                continue
+        else:
+            payload = response.text
+
+        parsed = parser(payload)
+        if parsed:
+            result.update(parsed)
+            print(f"[fetch_put_call_ratios] Loaded ratios from {source_name}: {parsed}")
+            break
+        print(f"[fetch_put_call_ratios] {source_name} did not contain usable ratios")
 
     for key, value in result.items():
         if value is None:
-            print(f"[fetch_put_call_ratios] Unable to parse {key} put/call ratio from CBOE page")
+            print(f"[fetch_put_call_ratios] Unable to obtain {key} put/call ratio; using placeholder")
 
     return result
 

@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bubble Index Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card: #111827;
+      --accent: #22d3ee;
+      --text: #e5e7eb;
+      --muted: #94a3b8;
+      --positive: #22c55e;
+      --warning: #eab308;
+      --danger: #ef4444;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 24px;
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      background: radial-gradient(circle at 10% 20%, rgba(34,211,238,0.1), transparent 30%),
+                  radial-gradient(circle at 90% 30%, rgba(34,197,94,0.1), transparent 25%),
+                  var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    h1 {
+      margin: 0;
+      font-size: 28px;
+    }
+    .meta { color: var(--muted); font-size: 14px; }
+    .grid { display: grid; gap: 16px; margin-top: 16px; }
+    .cards { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+    .card {
+      background: linear-gradient(145deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02));
+      border: 1px solid rgba(255,255,255,0.04);
+      border-radius: 14px;
+      padding: 16px;
+      box-shadow: 0 12px 60px rgba(0,0,0,0.25);
+      backdrop-filter: blur(8px);
+    }
+    .card h3 { margin: 0 0 4px; font-size: 14px; color: var(--muted); font-weight: 600; }
+    .big { font-size: 36px; font-weight: 700; }
+    .pill { display: inline-flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+    .pill.ok { background: rgba(34,197,94,0.15); color: var(--positive); }
+    .pill.warn { background: rgba(234,179,8,0.15); color: var(--warning); }
+    .pill.danger { background: rgba(239,68,68,0.15); color: var(--danger); }
+    .section-title { display: flex; align-items: center; justify-content: space-between; margin: 24px 0 8px; }
+    .section-title h2 { margin: 0; font-size: 18px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,0.06); font-size: 14px; }
+    th { text-align: left; color: var(--muted); font-weight: 600; }
+    .muted { color: var(--muted); }
+    .chart-card { padding: 0; }
+    canvas { width: 100%; }
+    .alert { padding: 12px 14px; border-radius: 10px; background: rgba(239,68,68,0.12); color: var(--danger); border: 1px solid rgba(239,68,68,0.3); margin: 12px 0; }
+    @media (max-width: 700px) { header { flex-direction: column; align-items: flex-start; } }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>US Tech/AI Bubble Index</h1>
+      <div class="meta" id="timestamp">Loading latest reading...</div>
+    </div>
+    <div class="pill warn" id="placeholder-flag" style="display:none;">Placeholder data in use</div>
+  </header>
+
+  <div class="grid cards" id="headline-cards">
+    <div class="card">
+      <h3>Bubble Index (0-10)</h3>
+      <div class="big" id="bubble-index">--</div>
+      <div class="muted">Weighted composite of sentiment &amp; froth</div>
+    </div>
+    <div class="card">
+      <h3>Weighted Score</h3>
+      <div class="big" id="weighted-score">--</div>
+      <div class="muted">0 = calm, 5+ = frothy</div>
+    </div>
+    <div class="card">
+      <h3>Total Put/Call</h3>
+      <div class="big" id="total-pcr">--</div>
+      <div class="muted">Equity: <span id="equity-pcr">--</span> | Index: <span id="index-pcr">--</span></div>
+    </div>
+    <div class="card">
+      <h3>QQQ vs 200d MA</h3>
+      <div class="big" id="qqq-dev">--</div>
+      <div class="muted">Deviation from the long-term trend</div>
+    </div>
+  </div>
+
+  <div class="section-title">
+    <h2>Bubble Index Trend</h2>
+    <span class="muted">Based on data in <code>data/bubble_daily.csv</code></span>
+  </div>
+  <div class="card chart-card">
+    <canvas id="history-chart" height="120"></canvas>
+  </div>
+
+  <div class="section-title">
+    <h2>Raw Inputs</h2>
+    <span class="muted">Latest readings pulled by the crawler</span>
+  </div>
+  <div class="card">
+    <table id="raw-table">
+      <thead>
+        <tr>
+          <th>Metric</th>
+          <th>Value</th>
+          <th>Score</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <script>
+    const formatter = new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 });
+
+    function setStatusBadge(anyPlaceholder) {
+      const flag = document.getElementById('placeholder-flag');
+      flag.style.display = anyPlaceholder ? 'inline-flex' : 'none';
+    }
+
+    function scoreBadge(score) {
+      if (score >= 2) return '<span class="pill danger">Frothy</span>';
+      if (score === 1) return '<span class="pill warn">Elevated</span>';
+      return '<span class="pill ok">Calm</span>';
+    }
+
+    async function fetchJson(url) {
+      const res = await fetch(url, { cache: 'no-store' });
+      if (!res.ok) throw new Error('Failed to load ' + url);
+      return res.json();
+    }
+
+    async function fetchCsv(url) {
+      const res = await fetch(url, { cache: 'no-store' });
+      if (!res.ok) throw new Error('Failed to load ' + url);
+      const text = await res.text();
+      const trimmed = text.trim();
+      if (!trimmed) return [];
+      const [headerLine, ...rows] = trimmed.split(/\r?\n/);
+      const headers = headerLine.split(',');
+      return rows.map((row) => {
+        const cols = row.split(',');
+        const record = {};
+        headers.forEach((key, idx) => {
+          record[key] = cols[idx];
+        });
+        record.bubbleIndex = Number(record.bubbleIndex);
+        return record;
+      });
+    }
+
+    function renderHeadline(latest) {
+      document.getElementById('bubble-index').textContent = latest.bubbleIndex;
+      document.getElementById('weighted-score').textContent = formatter.format(latest.weightedScore || 0);
+      document.getElementById('total-pcr').textContent = formatter.format(latest.raw.totalPutCall || 0);
+      document.getElementById('equity-pcr').textContent = formatter.format(latest.raw.equityPutCall || 0);
+      document.getElementById('index-pcr').textContent = formatter.format(latest.raw.indexPutCall || 0);
+      const pct = (latest.raw.priceDeviation || 0) * 100;
+      document.getElementById('qqq-dev').textContent = `${formatter.format(pct)}%`;
+      document.getElementById('timestamp').textContent = `Last updated ${new Date(latest.timestamp).toLocaleString()}`;
+    }
+
+    function renderTable(latest) {
+      const tbody = document.querySelector('#raw-table tbody');
+      tbody.innerHTML = '';
+      const rows = [
+        ['QQQ deviation vs 200d MA', `${formatter.format(latest.raw.priceDeviation * 100)}%`, latest.scores.priceDeviation],
+        ['Total put/call ratio', formatter.format(latest.raw.totalPutCall), latest.scores.totalPutCall],
+        ['Equity vs Index put/call spread', `${formatter.format(latest.raw.equityPutCall)} / ${formatter.format(latest.raw.indexPutCall)}`, latest.scores.smartDumb],
+        ['VIX level', formatter.format(latest.raw.vix), latest.scores.vix],
+        ['ANFCI', formatter.format(latest.raw.anfci), latest.scores.anfci],
+        ['IPO count (30d)', formatter.format(latest.raw.ipoCount30d), latest.scores.ipoHeat],
+      ];
+      rows.forEach(([label, value, score]) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${label}</td><td>${value}</td><td>${scoreBadge(score)}</td>`;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function renderChart(history) {
+      const ctx = document.getElementById('history-chart');
+      if (!history.length) {
+        ctx.parentElement.insertAdjacentHTML('beforeend', '<div class="alert">No history yet. Run <code>python bubble_calc.py</code> to collect data.</div>');
+        return;
+      }
+      const labels = history.map((row) => new Date(row.timestamp).toLocaleDateString());
+      const values = history.map((row) => row.bubbleIndex);
+      new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [{
+            label: 'Bubble Index',
+            data: values,
+            borderColor: '#22d3ee',
+            backgroundColor: 'rgba(34,211,238,0.15)',
+            tension: 0.35,
+            fill: true,
+            pointRadius: 3,
+          }],
+        },
+        options: {
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { grid: { color: 'rgba(255,255,255,0.05)' } },
+            y: { grid: { color: 'rgba(255,255,255,0.05)' }, suggestedMin: 0, suggestedMax: 10 },
+          },
+        },
+      });
+    }
+
+    async function init() {
+      try {
+        const latest = await fetchJson('../bubble_today.json');
+        renderHeadline(latest);
+        renderTable(latest);
+        setStatusBadge(Object.values(latest.raw).some((v) => Number(v) === 0));
+      } catch (err) {
+        document.body.insertAdjacentHTML('afterbegin', `<div class="alert">Failed to load latest reading: ${err.message}</div>`);
+      }
+
+      try {
+        const history = await fetchCsv('../data/bubble_daily.csv');
+        renderChart(history.slice(-100));
+      } catch (err) {
+        document.body.insertAdjacentHTML('afterbegin', `<div class="alert">Failed to load history: ${err.message}</div>`);
+      }
+    }
+
+    init();
+  </script>
+</body>
+</html>

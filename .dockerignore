@@ -1,0 +1,9 @@
+.git
+__pycache__
+*.pyc
+*.pyo
+*.log
+.env
+logs
+bubble_today.json
+data/*.csv
