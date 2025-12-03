@@ -7,18 +7,20 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     :root {
       --bg: #050915;
-      --card: rgba(15, 23, 42, 0.75);
-      --border: rgba(255, 255, 255, 0.05);
+      --card: rgba(15, 23, 42, 0.78);
+      --border: rgba(255, 255, 255, 0.06);
       --text: #e2e8f0;
       --muted: #94a3b8;
       --accent: #22d3ee;
       --accent-2: #22c55e;
       --danger: #ef4444;
       --warn: #eab308;
+      --coin: #e8c547;
     }
 
     * { box-sizing: border-box; }
@@ -26,15 +28,16 @@
     body {
       margin: 0;
       font-family: 'Inter', system-ui, -apple-system, sans-serif;
-      background: linear-gradient(135deg, rgba(34, 211, 238, 0.08), rgba(34, 197, 94, 0.05)),
-                  radial-gradient(circle at 20% 20%, rgba(34, 197, 94, 0.08), transparent 30%),
-                  radial-gradient(circle at 80% 0%, rgba(34, 211, 238, 0.12), transparent 30%),
-                  var(--bg);
+      background:
+        radial-gradient(circle at 20% 20%, rgba(34, 197, 94, 0.08), transparent 30%),
+        radial-gradient(circle at 82% 18%, rgba(34, 211, 238, 0.12), transparent 30%),
+        linear-gradient(135deg, rgba(232, 197, 71, 0.05), rgba(34, 211, 238, 0.08)),
+        var(--bg);
       color: var(--text);
       min-height: 100vh;
-      padding: 32px;
-      position: relative;
+      padding: 34px;
       overflow-x: hidden;
+      position: relative;
     }
 
     /* currency-inspired rings */
@@ -42,17 +45,17 @@
       content: "";
       position: absolute;
       border-radius: 50%;
-      background: radial-gradient(circle, rgba(34,211,238,0.18), transparent 55%);
-      filter: blur(60px);
+      background: radial-gradient(circle, rgba(232,197,71,0.16), transparent 55%);
+      filter: blur(70px);
       z-index: 0;
     }
-    body::before { width: 420px; height: 420px; top: -160px; left: -80px; }
-    body::after { width: 520px; height: 520px; bottom: -220px; right: -120px; background: radial-gradient(circle, rgba(34,197,94,0.16), transparent 55%); }
+    body::before { width: 360px; height: 360px; top: -120px; left: -120px; opacity: 0.7; }
+    body::after { width: 520px; height: 520px; bottom: -220px; right: -160px; background: radial-gradient(circle, rgba(34,211,238,0.15), transparent 55%); }
 
     .shell {
       position: relative;
       z-index: 1;
-      max-width: 1200px;
+      max-width: 1220px;
       margin: 0 auto;
     }
 
@@ -71,22 +74,34 @@
     }
 
     .coin {
-      width: 50px;
-      height: 50px;
+      width: 54px;
+      height: 54px;
       border-radius: 50%;
-      background: radial-gradient(circle at 30% 30%, #fff, #c7f9cc 30%, #1e293b 70%);
-      border: 2px solid rgba(255,255,255,0.15);
-      box-shadow: 0 10px 40px rgba(0,0,0,0.35);
+      background: radial-gradient(circle at 30% 30%, #fff, #f5ecb3 35%, #1e293b 70%);
+      border: 2px solid rgba(255,255,255,0.18);
+      box-shadow: 0 12px 50px rgba(0,0,0,0.35);
       display: grid;
       place-items: center;
       color: #0f172a;
       font-weight: 800;
+      font-size: 18px;
     }
 
     h1 { margin: 0; font-size: 28px; }
     .muted { color: var(--muted); }
 
-    .cta { display: inline-flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 999px; background: rgba(34,211,238,0.14); border: 1px solid var(--border); color: var(--text); text-decoration: none; font-weight: 600; }
+    .cta {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
+      border-radius: 999px;
+      background: rgba(34,211,238,0.14);
+      border: 1px solid var(--border);
+      color: var(--text);
+      text-decoration: none;
+      font-weight: 600;
+    }
 
     .grid { display: grid; gap: 16px; margin-top: 18px; }
     .cards { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
@@ -118,61 +133,86 @@
     .chart-card { padding: 12px; }
     canvas { width: 100%; }
 
-    .alert { padding: 12px 14px; border-radius: 12px; border: 1px solid rgba(239,68,68,0.28); background: rgba(239,68,68,0.12); color: var(--danger); margin: 12px 0; }
+    .alert {
+      padding: 12px 14px;
+      border-radius: 12px;
+      background: rgba(239,68,68,0.12);
+      color: #fecdd3;
+      border: 1px solid rgba(239,68,68,0.32);
+      margin-top: 12px;
+    }
 
-    .badge { padding: 8px 12px; border-radius: 12px; background: rgba(255,255,255,0.06); border: 1px solid var(--border); display: inline-flex; align-items: center; gap: 8px; font-weight: 600; }
+    .placeholder-flag { display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 10px; background: rgba(234,179,8,0.14); color: #eab308; font-weight: 700; }
+
+    .currency-band {
+      position: relative;
+      padding: 18px;
+      border-radius: 14px;
+      background: linear-gradient(120deg, rgba(232,197,71,0.12), rgba(34,211,238,0.08));
+      border: 1px dashed rgba(255,255,255,0.1);
+      overflow: hidden;
+    }
+    .currency-band::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background-image: linear-gradient(90deg, rgba(255,255,255,0.06) 1px, transparent 1px);
+      background-size: 12px 12px;
+      opacity: 0.18;
+      pointer-events: none;
+    }
+
+    .loading { color: var(--muted); display: flex; align-items: center; gap: 10px; }
+    .loading span { width: 10px; height: 10px; border-radius: 50%; background: var(--accent); animation: pulse 1s ease-in-out infinite; }
+    @keyframes pulse { 0%, 100% { transform: scale(1); opacity: 0.6; } 50% { transform: scale(1.4); opacity: 1; } }
+
+    @media (max-width: 760px) { body { padding: 22px; } header { flex-direction: column; align-items: flex-start; } }
   </style>
 </head>
 <body>
-  <div class="shell">
+  <div class="shell" id="app">
     <header>
       <div class="title">
         <div class="coin">$</div>
         <div>
           <h1>US Tech/AI Bubble Index</h1>
-          <div class="muted" id="timestamp">Loading latest reading…</div>
+          <div class="muted">Currency-inspired dashboard of market froth</div>
         </div>
       </div>
-      <div class="badge" id="placeholder-flag" style="display:none;">Placeholder market snapshot</div>
+      <div class="currency-band">
+        <div class="muted" style="font-size: 13px;">Bubble index blends options sentiment, tech price stretch, macro risk and IPO heat into one currency-themed view.</div>
+      </div>
     </header>
 
-    <div class="grid cards" id="headline">
-      <div class="card">
-        <h3>Bubble Index (0-10)</h3>
-        <div class="value" id="bubble-index">--</div>
-        <div class="muted">Composite of sentiment &amp; macro stress</div>
-      </div>
-      <div class="card">
-        <h3>Weighted Score</h3>
-        <div class="value" id="weighted-score">--</div>
-        <div class="muted">0 = calm &nbsp;|&nbsp; 5+ = frothy</div>
-      </div>
-      <div class="card">
-        <h3>Put/Call Ratios</h3>
-        <div class="value" id="total-pcr">--</div>
-        <div class="muted">Equity <span id="equity-pcr">--</span> · Index <span id="index-pcr">--</span></div>
-      </div>
-      <div class="card">
-        <h3>QQQ vs 200d MA</h3>
-        <div class="value" id="qqq-dev">--</div>
-        <div class="muted">Deviation from the long-term glidepath</div>
+    <div style="margin-top: 12px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+      <div v-if="placeholderUsed" class="placeholder-flag">Placeholder datapoints detected</div>
+      <div class="muted">{{ timestampText }}</div>
+    </div>
+
+    <div class="grid cards">
+      <div class="card" v-for="card in headlineCards" :key="card.label">
+        <h3>{{ card.label }}</h3>
+        <div class="value">{{ card.value }}</div>
+        <div class="muted">{{ card.subtext }}</div>
       </div>
     </div>
 
     <div class="section-title">
-      <h2>Bubble Trendline</h2>
-      <span class="muted">Sourced from <code>data/bubble_daily.csv</code></span>
+      <h2>Bubble pulse</h2>
+      <span class="chip" :class="tone.class">{{ tone.text }}</span>
     </div>
     <div class="card chart-card">
-      <canvas id="history-chart" height="120"></canvas>
+      <canvas id="history-chart"></canvas>
+      <div v-if="!history.length" class="alert">No historical records yet. Run <code>python bubble_calc.py</code> to populate <code>data/bubble_daily.csv</code>.</div>
     </div>
 
     <div class="section-title">
-      <h2>Today&#39;s Inputs</h2>
-      <span class="muted">Live snapshot from <code>bubble_today.json</code></span>
+      <h2>Raw inputs from <code>bubble_today.json</code></h2>
+      <div class="muted">Intraday gauges with risk-coloured badges</div>
     </div>
     <div class="card">
-      <table id="raw-table">
+      <div v-if="loading" class="loading"><span></span> Loading latest metrics…</div>
+      <table v-else>
         <thead>
           <tr>
             <th>Metric</th>
@@ -180,155 +220,177 @@
             <th>Score</th>
           </tr>
         </thead>
-        <tbody></tbody>
+        <tbody>
+          <tr v-for="metric in metrics" :key="metric.label">
+            <td>{{ metric.label }}</td>
+            <td>{{ metric.value }}</td>
+            <td v-html="metric.badge"></td>
+          </tr>
+        </tbody>
       </table>
+      <div v-if="error" class="alert">{{ error }}</div>
     </div>
   </div>
 
   <script>
-    const formatter = new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 });
+    const { createApp, ref, computed, watch, onMounted } = Vue;
 
-    const demoSnapshot = {
-      bubbleIndex: 4.8,
-      weightedScore: 4.2,
-      timestamp: new Date().toISOString(),
-      raw: {
-        priceDeviation: 0.07,
-        totalPutCall: 0.95,
-        equityPutCall: 0.87,
-        indexPutCall: 1.28,
-        vix: 15.2,
-        anfci: -0.25,
-        ipoCount30d: 9,
-      },
-      scores: {
-        priceDeviation: 2,
-        totalPutCall: 1,
-        smartDumb: 1,
-        vix: 1,
-        anfci: 0,
-        ipoHeat: 1,
-      },
-    };
+    createApp({
+      setup() {
+        const latest = ref(null);
+        const history = ref([]);
+        const loading = ref(true);
+        const error = ref('');
+        const chartRef = ref(null);
+        let chartInstance = null;
+        const formatter = new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 });
 
-    function badge(score) {
-      if (score >= 2) return '<span class="chip danger">Frothy</span>';
-      if (score === 1) return '<span class="chip warn">Elevated</span>';
-      return '<span class="chip ok">Calm</span>';
-    }
+        const placeholderUsed = computed(() => {
+          if (!latest.value || !latest.value.raw) return false;
+          return Object.values(latest.value.raw).some(v => Number(v) === 0);
+        });
 
-    async function fetchJson(url) {
-      const res = await fetch(url, { cache: 'no-store' });
-      if (!res.ok) throw new Error('Failed to load ' + url);
-      return res.json();
-    }
+        const timestampText = computed(() => {
+          if (!latest.value || !latest.value.timestamp) return 'Awaiting snapshot…';
+          return `Last updated ${new Date(latest.value.timestamp).toLocaleString()}`;
+        });
 
-    async function fetchCsv(url) {
-      const res = await fetch(url, { cache: 'no-store' });
-      if (!res.ok) throw new Error('Failed to load ' + url);
-      const text = await res.text();
-      const trimmed = text.trim();
-      if (!trimmed) return [];
-      const [header, ...rows] = trimmed.split(/\r?\n/);
-      const headers = header.split(',');
-      return rows.map(line => {
-        const values = line.split(',');
-        const item = {};
-        headers.forEach((key, idx) => item[key] = values[idx]);
-        item.bubbleIndex = Number(item.bubbleIndex);
-        return item;
-      });
-    }
+        const headlineCards = computed(() => {
+          const data = latest.value;
+          return [
+            {
+              label: 'Bubble Index (0-10)',
+              value: data ? formatter.format(data.bubbleIndex ?? 0) : '--',
+              subtext: 'Composite view of froth & sentiment',
+            },
+            {
+              label: 'Weighted Score',
+              value: data ? formatter.format(data.weightedScore ?? 0) : '--',
+              subtext: '0 = calm, 5+ = overheated',
+            },
+            {
+              label: 'Total Put/Call',
+              value: data ? formatter.format(data?.raw?.totalPutCall ?? 0) : '--',
+              subtext: `Equity ${formatter.format(data?.raw?.equityPutCall ?? 0)} | Index ${formatter.format(data?.raw?.indexPutCall ?? 0)}`,
+            },
+            {
+              label: 'QQQ vs 200d MA',
+              value: data ? `${formatter.format((data?.raw?.priceDeviation ?? 0) * 100)}%` : '--',
+              subtext: 'Deviation from long-term trend',
+            },
+          ];
+        });
 
-    function renderHeadline(latest) {
-      document.getElementById('bubble-index').textContent = formatter.format(latest.bubbleIndex ?? 0);
-      document.getElementById('weighted-score').textContent = formatter.format(latest.weightedScore ?? 0);
-      document.getElementById('total-pcr').textContent = formatter.format(latest.raw.totalPutCall ?? 0);
-      document.getElementById('equity-pcr').textContent = formatter.format(latest.raw.equityPutCall ?? 0);
-      document.getElementById('index-pcr').textContent = formatter.format(latest.raw.indexPutCall ?? 0);
-      const pct = (latest.raw.priceDeviation ?? 0) * 100;
-      document.getElementById('qqq-dev').textContent = `${formatter.format(pct)}%`;
-      const ts = latest.timestamp ? new Date(latest.timestamp).toLocaleString() : 'N/A';
-      document.getElementById('timestamp').textContent = `Last updated ${ts}`;
-    }
+        const metrics = computed(() => {
+          if (!latest.value) return [];
+          const raw = latest.value.raw || {};
+          const scores = latest.value.scores || {};
+          return [
+            { label: 'QQQ deviation vs 200d MA', value: `${formatter.format((raw.priceDeviation ?? 0) * 100)}%`, badge: badge(scores.priceDeviation) },
+            { label: 'Total put/call ratio', value: formatter.format(raw.totalPutCall ?? 0), badge: badge(scores.totalPutCall) },
+            { label: 'Equity vs Index put/call spread', value: `${formatter.format(raw.equityPutCall ?? 0)} / ${formatter.format(raw.indexPutCall ?? 0)}`, badge: badge(scores.smartDumb) },
+            { label: 'VIX level', value: formatter.format(raw.vix ?? 0), badge: badge(scores.vix) },
+            { label: 'ANFCI', value: formatter.format(raw.anfci ?? 0), badge: badge(scores.anfci) },
+            { label: 'IPO count (30d)', value: formatter.format(raw.ipoCount30d ?? 0), badge: badge(scores.ipoHeat) },
+          ];
+        });
 
-    function renderTable(latest) {
-      const tbody = document.querySelector('#raw-table tbody');
-      tbody.innerHTML = '';
-      const rows = [
-        ['QQQ deviation vs 200d MA', `${formatter.format((latest.raw.priceDeviation ?? 0) * 100)}%`, latest.scores.priceDeviation],
-        ['Total put/call ratio', formatter.format(latest.raw.totalPutCall ?? 0), latest.scores.totalPutCall],
-        ['Equity vs Index put/call spread', `${formatter.format(latest.raw.equityPutCall ?? 0)} / ${formatter.format(latest.raw.indexPutCall ?? 0)}`, latest.scores.smartDumb],
-        ['VIX level', formatter.format(latest.raw.vix ?? 0), latest.scores.vix],
-        ['ANFCI', formatter.format(latest.raw.anfci ?? 0), latest.scores.anfci],
-        ['IPO count (30d)', formatter.format(latest.raw.ipoCount30d ?? 0), latest.scores.ipoHeat],
-      ];
-      rows.forEach(([label, value, score]) => {
-        const tr = document.createElement('tr');
-        tr.innerHTML = `<td>${label}</td><td>${value}</td><td>${badge(score)}</td>`;
-        tbody.appendChild(tr);
-      });
-    }
+        const tone = computed(() => {
+          const value = latest.value?.bubbleIndex ?? 0;
+          if (value >= 8) return { text: 'Speculative fever', class: 'danger chip' };
+          if (value >= 5) return { text: 'Elevated risk-on', class: 'warn chip' };
+          return { text: 'Measured optimism', class: 'ok chip' };
+        });
 
-    function renderChart(history) {
-      const ctx = document.getElementById('history-chart');
-      if (!history.length) {
-        ctx.parentElement.insertAdjacentHTML('beforeend', '<div class="alert">No historical records found. Run <code>python bubble_calc.py</code> to generate <code>data/bubble_daily.csv</code>.</div>');
-        return;
+        function badge(score) {
+          if (score >= 2) return '<span class="chip danger">Frothy</span>';
+          if (score === 1) return '<span class="chip warn">Elevated</span>';
+          return '<span class="chip ok">Calm</span>';
+        }
+
+        async function fetchJson(url) {
+          const res = await fetch(url, { cache: 'no-store' });
+          if (!res.ok) throw new Error('Failed to load ' + url);
+          return res.json();
+        }
+
+        async function fetchCsv(url) {
+          const res = await fetch(url, { cache: 'no-store' });
+          if (!res.ok) throw new Error('Failed to load ' + url);
+          const text = (await res.text()).trim();
+          if (!text) return [];
+          const [header, ...rows] = text.split(/\r?\n/);
+          const headers = header.split(',');
+          return rows.map(line => {
+            const values = line.split(',');
+            const item = {};
+            headers.forEach((key, idx) => item[key] = values[idx]);
+            item.bubbleIndex = Number(item.bubbleIndex);
+            return item;
+          });
+        }
+
+        async function loadLatest() {
+          loading.value = true;
+          try {
+            latest.value = await fetchJson('./bubble_today.json');
+          } catch (err) {
+            console.error(err);
+            error.value = 'Unable to load latest snapshot';
+          } finally {
+            loading.value = false;
+          }
+        }
+
+        async function loadHistory() {
+          try {
+            history.value = await fetchCsv('./data/bubble_daily.csv');
+          } catch (err) {
+            console.warn('No history available:', err);
+            history.value = [];
+          }
+        }
+
+        function buildChart() {
+          const el = document.getElementById('history-chart');
+          if (!el) return;
+          if (chartInstance) chartInstance.destroy();
+          if (!history.value.length) return;
+          const labels = history.value.map(row => new Date(row.timestamp).toLocaleDateString());
+          const values = history.value.map(row => row.bubbleIndex);
+          chartInstance = new Chart(el, {
+            type: 'line',
+            data: {
+              labels,
+              datasets: [{
+                label: 'Bubble Index',
+                data: values,
+                borderColor: '#22d3ee',
+                backgroundColor: 'rgba(34,211,238,0.16)',
+                tension: 0.35,
+                fill: true,
+                pointRadius: 3,
+              }],
+            },
+            options: {
+              plugins: { legend: { display: false } },
+              scales: {
+                x: { grid: { color: 'rgba(255,255,255,0.05)' } },
+                y: { grid: { color: 'rgba(255,255,255,0.05)' }, suggestedMin: 0, suggestedMax: 10 },
+              },
+            },
+          });
+        }
+
+        watch(history, () => buildChart());
+        onMounted(() => {
+          loadLatest();
+          loadHistory();
+        });
+
+        return { headlineCards, metrics, tone, placeholderUsed, timestampText, loading, error, history };
       }
-      const labels = history.map(row => new Date(row.timestamp).toLocaleDateString());
-      const values = history.map(row => row.bubbleIndex);
-      new Chart(ctx, {
-        type: 'line',
-        data: {
-          labels,
-          datasets: [{
-            label: 'Bubble Index',
-            data: values,
-            borderColor: '#22d3ee',
-            backgroundColor: 'rgba(34,211,238,0.16)',
-            tension: 0.35,
-            fill: true,
-            pointRadius: 3,
-          }],
-        },
-        options: {
-          plugins: { legend: { display: false } },
-          scales: {
-            x: { grid: { color: 'rgba(255,255,255,0.05)' } },
-            y: { grid: { color: 'rgba(255,255,255,0.05)' }, suggestedMin: 0, suggestedMax: 10 },
-          },
-        },
-      });
-    }
-
-    async function loadLatest() {
-      try {
-        const latest = await fetchJson('./bubble_today.json');
-        renderHeadline(latest);
-        renderTable(latest);
-        const placeholderUsed = Object.values(latest.raw || {}).some(v => Number(v) === 0);
-        document.getElementById('placeholder-flag').style.display = placeholderUsed ? 'inline-flex' : 'none';
-      } catch (err) {
-        console.warn('Falling back to demo snapshot:', err);
-        document.getElementById('placeholder-flag').style.display = 'inline-flex';
-        renderHeadline(demoSnapshot);
-        renderTable(demoSnapshot);
-      }
-    }
-
-    async function loadHistory() {
-      try {
-        const history = await fetchCsv('./data/bubble_daily.csv');
-        renderChart(history.slice(-120));
-      } catch (err) {
-        console.warn('No history available:', err);
-        renderChart([]);
-      }
-    }
-
-    loadLatest();
-    loadHistory();
+    }).mount('#app');
   </script>
 </body>
 </html>

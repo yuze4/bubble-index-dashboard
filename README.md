@@ -17,12 +17,12 @@ When running in GitHub Codespaces or GitHub Actions, you can also set `FINNHUB_A
 
 ## Run locally
 
-The dashboard is a static page (`static/dashboard.html`) that reads `bubble_today.json` and `data/bubble_daily.csv`. Generate the data and serve the page locally with:
+The dashboard is a static page (root `index.html`) that reads `bubble_today.json` and `data/bubble_daily.csv`. Generate the data and serve the page locally with:
 
 ```bash
 python bubble_calc.py
 python -m http.server 8000
-# open http://localhost:8000/static/dashboard.html
+# open http://localhost:8000/
 ```
 
 ## Run with Docker
@@ -37,7 +37,7 @@ docker run -it --rm \
   -e FRED_API_KEY=YOUR_FRED_API_KEY \
   -e PORT=8000 \
   bubble-dashboard
-# open http://localhost:8000/static/dashboard.html
+# open http://localhost:8000/
 ```
 
 Environment variables:
