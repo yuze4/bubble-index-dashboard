@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Bubble Index Dashboard</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+      :root {
+        --bg: #0b1021;
+        --panel: #111936;
+        --text: #e8eefc;
+        --muted: #9fb2d9;
+        --accent: #66b8ff;
+        --accent-2: #8d7bff;
+        --danger: #ff7b9c;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        font-family: "Inter", system-ui, -apple-system, sans-serif;
+        color: var(--text);
+      }
+      header {
+        padding: 24px 28px 10px;
+      }
+      h1 {
+        margin: 0 0 6px;
+        font-size: 28px;
+        letter-spacing: 0.4px;
+      }
+      p.subtitle {
+        margin: 0;
+        color: var(--muted);
+      }
+      .layout {
+        display: grid;
+        grid-template-columns: 2fr 1fr;
+        gap: 16px;
+        padding: 0 24px 32px;
+      }
+      .card {
+        background: var(--panel);
+        border: 1px solid rgba(255, 255, 255, 0.04);
+        border-radius: 14px;
+        padding: 16px 18px;
+        box-shadow: 0 12px 24px rgba(0, 0, 0, 0.18);
+      }
+      .kpi-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 12px;
+        margin-bottom: 12px;
+      }
+      .kpi {
+        background: linear-gradient(135deg, rgba(102, 184, 255, 0.12), rgba(141, 123, 255, 0.08));
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        padding: 12px 14px;
+        border-radius: 12px;
+      }
+      .kpi h3 {
+        margin: 0;
+        font-size: 14px;
+        color: var(--muted);
+        font-weight: 600;
+      }
+      .kpi .value {
+        margin-top: 6px;
+        font-size: 26px;
+        font-weight: 700;
+        letter-spacing: 0.3px;
+      }
+      .kpi .pill {
+        margin-top: 8px;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 10px;
+        border-radius: 20px;
+        background: rgba(255, 255, 255, 0.06);
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 600;
+      }
+      .split {
+        display: grid;
+        grid-template-columns: 1.2fr 0.8fr;
+        gap: 12px;
+      }
+      .table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 6px;
+      }
+      .table th,
+      .table td {
+        text-align: left;
+        padding: 8px 6px;
+        color: var(--muted);
+        font-size: 13px;
+      }
+      .table th {
+        color: var(--text);
+        font-weight: 700;
+      }
+      .table tr:nth-child(even) td {
+        background: rgba(255, 255, 255, 0.02);
+      }
+      .badge {
+        padding: 4px 8px;
+        border-radius: 8px;
+        font-weight: 700;
+        font-size: 12px;
+        letter-spacing: 0.3px;
+      }
+      .badge-good {
+        background: rgba(102, 184, 255, 0.18);
+        color: var(--text);
+      }
+      .badge-warn {
+        background: rgba(255, 215, 128, 0.2);
+        color: #ffd780;
+      }
+      .badge-bad {
+        background: rgba(255, 123, 156, 0.2);
+        color: var(--danger);
+      }
+      .footer {
+        text-align: center;
+        color: var(--muted);
+        padding: 14px 0 24px;
+        font-size: 12px;
+      }
+      @media (max-width: 960px) {
+        .layout {
+          grid-template-columns: 1fr;
+        }
+        .split {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>US Tech/AI Bubble Index</h1>
+      <p class="subtitle">
+        Latest composite view of pricing excess, positioning and macro risk.
+      </p>
+    </header>
+
+    <div class="layout">
+      <section class="card" aria-live="polite">
+        <div class="kpi-grid">
+          <div class="kpi" id="bubble-index">
+            <h3>Bubble Index</h3>
+            <div class="value" id="bubble-index-value">--</div>
+            <div class="pill" id="bubble-index-pill">Waiting for data…</div>
+          </div>
+          <div class="kpi">
+            <h3>Weighted Score</h3>
+            <div class="value" id="weighted-score">--</div>
+            <div class="pill">0 = Calm · 10 = Extreme</div>
+          </div>
+          <div class="kpi">
+            <h3>Last Updated</h3>
+            <div class="value" id="last-updated">--</div>
+            <div class="pill">UTC</div>
+          </div>
+        </div>
+
+        <div class="split">
+          <div class="card" style="padding: 14px;">
+            <h3 style="margin: 0 0 6px;">Bubble Index History</h3>
+            <canvas id="history-chart" height="160"></canvas>
+            <p class="subtitle" style="margin-top: 6px;">
+              Uses <code>data/bubble_daily.csv</code> when available.
+            </p>
+          </div>
+          <div class="card" style="padding: 14px;">
+            <h3 style="margin: 0 0 6px;">Current Factor Scores</h3>
+            <canvas id="scores-chart" height="160"></canvas>
+          </div>
+        </div>
+      </section>
+
+      <aside class="card">
+        <h3 style="margin: 0 0 6px;">Raw Inputs</h3>
+        <table class="table" id="raw-table">
+          <thead>
+            <tr>
+              <th>Metric</th>
+              <th>Value</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </aside>
+    </div>
+
+    <div class="footer">Data refresh is handled by <code>bubble_calc.py</code>.</div>
+
+    <script>
+      const scoreLabels = {
+        priceDeviation: "QQQ vs 200D MA",
+        totalPutCall: "Total Put/Call",
+        smartDumb: "Smart vs. Dumb",
+        vix: "VIX Level",
+        anfci: "ANFCI",
+        ipoHeat: "IPO Heat",
+      };
+
+      function bucketBadge(score) {
+        if (score === 0) return "badge badge-good";
+        if (score === 1) return "badge badge-warn";
+        return "badge badge-bad";
+      }
+
+      async function fetchJson(path) {
+        try {
+          const resp = await fetch(path);
+          if (!resp.ok) throw new Error(resp.statusText);
+          return await resp.json();
+        } catch (err) {
+          console.warn("Fetch JSON failed", path, err);
+          return null;
+        }
+      }
+
+      async function fetchCsv(path) {
+        try {
+          const resp = await fetch(path);
+          if (!resp.ok) throw new Error(resp.statusText);
+          return await resp.text();
+        } catch (err) {
+          console.warn("Fetch CSV failed", path, err);
+          return null;
+        }
+      }
+
+      function renderRawTable(raw) {
+        const tbody = document.querySelector("#raw-table tbody");
+        tbody.innerHTML = "";
+        Object.entries(raw).forEach(([key, val]) => {
+          const tr = document.createElement("tr");
+          const name = scoreLabels[key] || key;
+          tr.innerHTML = `<td>${name}</td><td>${Number(val).toFixed(3)}</td>`;
+          tbody.appendChild(tr);
+        });
+      }
+
+      function renderScores(scores) {
+        const ctx = document.getElementById("scores-chart");
+        const labels = Object.keys(scores).map((k) => scoreLabels[k] || k);
+        const data = Object.values(scores);
+        new Chart(ctx, {
+          type: "bar",
+          data: {
+            labels,
+            datasets: [
+              {
+                label: "Score (0 calm → 2 frothy)",
+                data,
+                backgroundColor: data.map((s) =>
+                  s === 0 ? "#4fc3f7" : s === 1 ? "#ffd166" : "#ef476f"
+                ),
+                borderRadius: 6,
+              },
+            ],
+          },
+          options: {
+            plugins: { legend: { display: false } },
+            scales: {
+              y: { beginAtZero: true, max: 2, ticks: { stepSize: 1 } },
+            },
+          },
+        });
+      }
+
+      function renderHistory(csvText) {
+        if (!csvText) return;
+        const lines = csvText.trim().split(/\r?\n/);
+        if (lines.length < 2) return;
+        const headers = lines[0].split(",");
+        const tsIdx = headers.indexOf("timestamp");
+        const idxIdx = headers.indexOf("bubbleIndex");
+        if (tsIdx === -1 || idxIdx === -1) return;
+        const timestamps = [];
+        const values = [];
+        for (let i = 1; i < lines.length; i++) {
+          const cols = lines[i].split(",");
+          if (cols.length <= Math.max(tsIdx, idxIdx)) continue;
+          timestamps.push(cols[tsIdx]);
+          values.push(Number(cols[idxIdx]));
+        }
+        const ctx = document.getElementById("history-chart");
+        new Chart(ctx, {
+          type: "line",
+          data: {
+            labels: timestamps,
+            datasets: [
+              {
+                label: "Bubble Index",
+                data: values,
+                borderColor: "#66b8ff",
+                backgroundColor: "rgba(102, 184, 255, 0.15)",
+                tension: 0.3,
+                fill: true,
+                pointRadius: 0,
+              },
+            ],
+          },
+          options: {
+            plugins: { legend: { display: false } },
+            scales: {
+              x: { display: false },
+              y: { beginAtZero: true },
+            },
+          },
+        });
+      }
+
+      function setBubbleIndex(bubbleIndex, weightedScore, timestamp) {
+        const valueEl = document.getElementById("bubble-index-value");
+        const pillEl = document.getElementById("bubble-index-pill");
+        valueEl.textContent = bubbleIndex != null ? bubbleIndex.toFixed(1) : "--";
+        document.getElementById("weighted-score").textContent =
+          weightedScore != null ? weightedScore.toFixed(2) : "--";
+        document.getElementById("last-updated").textContent = timestamp || "--";
+
+        if (bubbleIndex == null) return;
+        const status =
+          bubbleIndex < 4
+            ? { text: "Calm", cls: "badge-good" }
+            : bubbleIndex < 7
+            ? { text: "Elevated", cls: "badge-warn" }
+            : { text: "Frothy", cls: "badge-bad" };
+        pillEl.className = `pill badge ${status.cls}`;
+        pillEl.textContent = status.text;
+      }
+
+      async function init() {
+        const today = await fetchJson("/bubble_today.json");
+        if (today) {
+          setBubbleIndex(today.bubbleIndex, today.weightedScore, today.timestamp);
+          renderRawTable(today.raw || {});
+          if (today.scores) renderScores(today.scores);
+        }
+
+        const csvText = await fetchCsv("/data/bubble_daily.csv");
+        renderHistory(csvText);
+      }
+
+      init();
+    </script>
+  </body>
+</html>
